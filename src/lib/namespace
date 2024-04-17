@@ -1,0 +1,52 @@
+## Add an namespace
+# $1: namespace name
+# $2: interface 
+namespace_add_interface() {
+    local space="$1" interface="$2"
+    if ! namespace_is_exist "$space"; then
+        do_debug ip netns add "$space" || return
+    fi
+
+    ip link set dev "$interface" netns "$space"
+}
+
+
+## Check if a string represents a network namespace
+# $1: potential interface name
+namespace_is_exist() {
+    [[ -f /var/run/netns/$1 ]]
+}
+
+
+## Exec command in namespace
+# $1: namespace
+# $2: command
+# ${@:3}: args
+namespace_exec() {
+    local space="$1" command="$2" args="${@:3}"
+    case "$(type -t $command)" in
+        file|alias)
+            ;;
+        function)
+            command="$(declare -f "$command")"
+            ;;
+    esac
+    ip netns exec "$space" bash -c "$command $args"
+    return $?
+}
+
+
+## Check if a interface in a network namespace
+# $1: namespace name
+# $2: interface
+namespace_contain_interface() {
+    local namespace="$1" interface="$2"
+    namespace_exec "$namespace" test -d "/sys/class/net/${interface%%:?*}"
+}
+
+
+## Check is in namespace
+# $1: namespace
+is_in_namespace() {
+    [[ -n "$1" ]] && [[ "$(ip netns identify $$)" = "$1" ]]
+}

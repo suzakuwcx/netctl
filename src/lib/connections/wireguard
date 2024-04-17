@@ -1,26 +1,45 @@
 # Contributed by: Thibaut Sautereau <thibaut@sautereau.fr>
 
 . "$SUBR_DIR/ip"
+. "$SUBR_DIR/namespace"
 
 # Make sure BindsToInterfaces is set
 BindsToInterfaces=("${BindsToInterfaces[@]}")
 
-wireguard_up() {
-    if is_interface "$Interface"; then
-        report_error "Interface '$Interface' already exists"
-        return 1
-    fi
-
-    # Treat $MACAddress as in other connections, but it has no effect here
-    interface_add wireguard "$Interface" "$MACAddress" || return
+wireguard_setconf() {
     wg setconf "$Interface" "${WGConfigFile:-/etc/wireguard/$Interface.conf}"
     bring_interface_up "$Interface"
     ip_set
 }
 
+wireguard_up() {
+    if is_in_namespace "${WGNamespace}"; then
+        wireguard_setconf
+        return 0;
+    elif [[ -n "$WGNamespace" ]]; then
+        # Treat $MACAddress as in other connections, but it has no effect here
+        interface_add wireguard "$Interface" "$MACAddress" || return
+        namespace_add_interface $WGNamespace $Interface
+
+        # Recursion in sub namespace
+        namespace_exec "$WGNamespace" $0 start "$Profile" || return $?
+    elif ! is_interface "$Interface"; then
+        interface_add wireguard "$Interface" "$MACAddress" || return
+        wireguard_setconf
+        return 0
+    else
+        report_error "Interface '$Interface' already exists"
+        return 1
+    fi
+}
+
 wireguard_down() {
-    ip_unset
-    interface_delete "$Interface"
+    if [[ -n "$WGNamespace" ]] && ! is_in_namespace "$WGNamespace"; then
+        namespace_exec "$WGNamespace" "$0" stop "$Profile" || return $?
+    else
+        ip_unset
+        interface_delete "$Interface"
+    fi
 }
 
 

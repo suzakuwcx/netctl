@@ -2,6 +2,7 @@ Description="Example WireGuard tunnel connection"
 Interface=wg0
 Connection=wireguard
 WGConfigFile=/etc/wireguard/wg0.conf
+# WGNamespace=subnet
 
 ## Example IP configuration
 IP=static
